@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>2r</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .wallet, .blockchain-info {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .transactions, .blocks {
+            margin-top: 20px;
+        }
+        .transaction, .block {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #28a745;
+            color: #fff;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #ccc;
+        }
+        .block-info {
+            font-size: 0.9em;
+            margin-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>2r</h1>
+    <div class="wallet">
+        <h2>Wallet</h2>
+        <p><strong>Address:</strong> <span id="address"></span></p>
+        <p><strong>Balance:</strong> <span id="balance">0</span> 2r</p>
+        <h3>Send Coins</h3>
+        <input type="text" id="recipient" placeholder="Recipient Address">
+        <input type="number" id="amount" placeholder="Amount">
+        <button id="send">Send</button>
+        <button id="mine">Mine Block</button>
+    </div>
+    <div class="transactions">
+        <h2>Transaction History</h2>
+        <div id="transaction-history"></div>
+    </div>
+    <div class="blockchain-info">
+        <h2>Blockchain</h2>
+        <div id="blocks"></div>
+    </div>
+
+    <script>
+        // Simple Blockchain and Transaction Classes
+        class Block {
+            constructor(index, previousHash, timestamp, transactions, demurrageRate) {
+                this.index = index;
+                this.previousHash = previousHash;
+                this.timestamp = timestamp;
+                this.transactions = transactions;
+                this.demurrageRate = demurrageRate;
+                this.hash = this.calculateHash();
+            }
+
+            calculateHash() {
+                return CryptoJS.SHA256(
+                    this.index + this.previousHash + this.timestamp + JSON.stringify(this.transactions) + this.demurrageRate
+                ).toString();
+            }
+        }
+
+        class Blockchain {
+            constructor(demurrageRate) {
+                this.chain = [this.createGenesisBlock(demurrageRate)];
+                this.currentTransactions = [];
+                this.demurrageRate = demurrageRate;
+                this.balances = {};
+            }
+
+            createGenesisBlock(demurrageRate) {
+                return new Block(0, '0', Date.now(), [], demurrageRate);
+            }
+
+            getLatestBlock() {
+                return this.chain[this.chain.length - 1];
+            }
+
+            addBlock(newBlock) {
+                this.chain.push(newBlock);
+                this.applyDemurrage(newBlock.timestamp);
+                this.updateBalances(newBlock.transactions);
+            }
+
+            addTransaction(sender, recipient, amount) {
+                this.currentTransactions.push({ sender, recipient, amount });
+            }
+
+            mineBlock(minerAddress) {
+                const latestBlock = this.getLatestBlock();
+                const newBlock = new Block(
+                    latestBlock.index + 1,
+                    latestBlock.hash,
+                    Date.now(),
+                    this.currentTransactions,
+                    this.demurrageRate
+                );
+                newBlock.hash = newBlock.calculateHash();
+                this.currentTransactions = [];
+                this.addBlock(newBlock);
+
+                // Reward the miner
+                this.balances[minerAddress] = (this.balances[minerAddress] || 0) + 50; // Static mining reward
+                return newBlock;
+            }
+
+            applyDemurrage(timestamp) {
+                const timeElapsed = (timestamp - this.getLatestBlock().timestamp) / (1000 * 60 * 60 * 24); // days
+                for (const address in this.balances) {
+                    this.balances[address] *= Math.pow((1 - this.demurrageRate), timeElapsed);
+                }
+            }
+
+            updateBalances(transactions) {
+                transactions.forEach(tx => {
+                    if (tx.sender !== '0') {
+                        this.balances[tx.sender] = (this.balances[tx.sender] || 0) - tx.amount;
+                    }
+                    this.balances[tx.recipient] = (this.balances[tx.recipient] || 0) + tx.amount;
+                });
+            }
+
+            getBalance(address) {
+                return this.balances[address] || 0;
+            }
+        }
+
+        // Crypto Utilities
+        function generateAddress() {
+            return CryptoJS.SHA256(Math.random().toString()).toString().substring(0, 16);
+        }
+
+        // P2P Network Simulation
+        class P2PNetwork {
+            constructor(blockchain) {
+                this.peers = [];
+                this.blockchain = blockchain;
+                this.address = generateAddress();
+                this.blockchain.balances[this.address] = 100; // Starting balance for testing
+            }
+
+            connectToPeer(url) {
+                const ws = new WebSocket(url);
+                ws.onmessage = (event) => {
+                    // Check if the incoming message is a Blob
+                    if (event.data instanceof Blob) {
+                        // Use the FileReader approach to read the Blob as text
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            try {
+                                const message = JSON.parse(reader.result);
+                                this.processMessage(message);
+                            } catch (e) {
+                                console.error('Error parsing JSON:', e);
+                            }
+                        };
+                        reader.readAsText(event.data);
+                    } else {
+                        // Directly parse the incoming message as JSON
+                        try {
+                            const message = JSON.parse(event.data);
+                            this.processMessage(message);
+                        } catch (e) {
+                            console.error('Error parsing JSON:', e);
+                        }
+                    }
+                };
+                ws.onopen = () => {
+                    this.peers.push(ws);
+                    console.log('Connected to ' + url);
+                };
+                ws.onerror = (error) => {
+                    console.log('WebSocket Error ' + error);
+                };
+            }
+
+            broadcast(message) {
+                this.peers.forEach(peer => peer.send(JSON.stringify(message)));
+            }
+
+            sendTransaction(recipient, amount) {
+                const transaction = { sender: this.address, recipient, amount };
+                this.blockchain.addTransaction(transaction.sender, transaction.recipient, transaction.amount);
+                this.broadcast({ type: 'transaction', transaction });
+                updateWalletUI();
+            }
+
+            mineBlock(minerAddress) {
+                const block = this.blockchain.mineBlock(minerAddress);
+                this.broadcast({ type: 'block', block: block.toJSON() });
+                updateWalletUI();
+            }
+
+            processMessage(message) {
+                if (message.type === 'block') {
+                    this.blockchain.addBlock(Block.fromJSON(message.block));
+                    updateWalletUI();
+                } else if (message.type === 'transaction') {
+                    this.blockchain.addTransaction(message.transaction.sender, message.transaction.recipient, message.transaction.amount);
+                    updateWalletUI();
+                }
+            }
+        }
+
+        // Initialize Blockchain and P2P Network
+        const blockchain = new Blockchain(0.01); // 1% daily demurrage
+        const p2pNetwork = new P2PNetwork(blockchain);
+
+        // UI Updates
+        function updateWalletUI() {
+            document.getElementById('address').textContent = p2pNetwork.address;
+            document.getElementById('balance').textContent = blockchain.getBalance(p2pNetwork.address).toFixed(2);
+            updateTransactionHistory();
+            updateBlockchainInfo();
+        }
+
+        function updateTransactionHistory() {
+            const transactions = blockchain.chain
+                .flatMap(block => block.transactions)
+                .map((tx, index) => `<div class="transaction">
+                    <span>${index + 1}. From ${tx.sender} to ${tx.recipient}, Amount: ${tx.amount}</span>
+                </div>`).join('');
+            document.getElementById('transaction-history').innerHTML = transactions;
+        }
+
+        function updateBlockchainInfo() {
+            const blocks = blockchain.chain
+                .map(block => `<div class="block">
+                    <span>Block #${block.index}: Hash: ${block.hash.substring(0, 20)}...</span>
+                    <div class="block-info">
+                        <p>Previous Hash: ${block.previousHash.substring(0, 20)}...</p>
+                        <p>Transactions: ${block.transactions.map(tx => `From ${tx.sender} to ${tx.recipient}, Amount: ${tx.amount}`).join(', ')}</p>
+                    </div>
+                </div>`).join('');
+            document.getElementById('blocks').innerHTML = blocks;
+        }
+
+        // Event Listeners for UI buttons
+        document.getElementById('send').addEventListener('click', () => {
+            const recipient = document.getElementById('recipient').value;
+            const amount = parseFloat(document.getElementById('amount').value);
+            if (recipient && !isNaN(amount)) {
+                p2pNetwork.sendTransaction(recipient, amount);
+                document.getElementById('recipient').value = '';
+                document.getElementById('amount').value = '';
+            }
+        });
+
+        document.getElementById('mine').addEventListener('click', () => {
+            p2pNetwork.mineBlock(p2pNetwork.address);
+        });
+
+        // Convert Block and Transaction objects to and from JSON
+        Block.fromJSON = function(json) {
+            const block = new Block(json.index, json.previousHash, json.timestamp, json.transactions, json.demurrageRate);
+            block.hash = json.hash;
+            return block;
+        };
+
+        Block.prototype.toJSON = function() {
+            return {
+                index: this.index,
+                previousHash: this.previousHash,
+                timestamp: this.timestamp,
+                transactions: this.transactions,
+                demurrageRate: this.demurrageRate,
+                hash: this.hash
+            };
+        };
+
+        // Connect to peer nodes on load
+        window.addEventListener('load', () => {
+            // Example: Connect to multiple known peers
+            p2pNetwork.connectToPeer('ws://localhost:3001');
+            p2pNetwork.connectToPeer('ws://localhost:3002');
+
+            // Uncomment and modify these lines if you have more nodes
+            // p2pNetwork.connectToPeer('ws://localhost:3003');
+            // p2pNetwork.connectToPeer('ws://localhost:3004');
+        });
+    </script>
+</body>
+</html>
