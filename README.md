@@ -1,6 +1,6 @@
-# 2r1 Coin
+# 2r Coin
 
-2r1 Coin is a blockchain-based cryptocurrency simulation that demonstrates the basic functionalities of a decentralized digital currency. This project incorporates key blockchain concepts such as mining, transactions, and peer-to-peer (P2P) networking, with an added implementation of the Freigeld (demurrage) system to encourage spending and reduce hoarding.
+2r Coin is a blockchain-based cryptocurrency simulation that demonstrates the basic functionalities of a decentralized digital currency. This project incorporates key blockchain concepts such as mining, transactions, and peer-to-peer (P2P) networking, with an added implementation of the Freigeld (demurrage) system to encourage spending and reduce hoarding.
 
 ## Features
 
